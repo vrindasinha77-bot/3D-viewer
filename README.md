@@ -1,2 +1,3 @@
 # 3D-viewer
-My first GitHub repository: A simple Java study project experimenting with basic web views and 3D rendering scripts.
+#Cuddly Viewer: An autonomous AI merchandising showroom bridging the gap between Qloo's cultural AI and 3D garment physics.
+
