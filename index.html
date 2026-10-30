@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Viewer - Spatial Showroom</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(ellipse at 65% 50%, #15182e 0%, #0a0c18 60%, #05060b 100%);
+            overflow: hidden;
+            color: #fff;
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+
+        #canvas-container {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+        }
+
+        .glass-panel {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            z-index: 10;
+            width: min(420px, calc(100vw - 48px)); /* Expanded width for rich presentation */
+            background: rgba(11, 15, 26, 0.78);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 26px;
+            border-radius: 24px;
+            box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.8), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+            max-height: calc(100vh - 48px);
+            overflow-y: auto;
+        }
+
+        /* 1-Click Aesthetic Preset Chips */
+        .presets-row {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .preset-chip {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #cbd5e1;
+            padding: 5px 11px;
+            border-radius: 20px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .preset-chip:hover {
+            background: rgba(129, 140, 248, 0.25);
+            border-color: #818cf8;
+            color: #fff;
+            transform: translateY(-1px);
+        }
+
+        .pipeline-card {
+            margin-top: 18px;
+            padding: 12px 14px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            font-size: 11px;
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+        .pipeline-step {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .pipeline-step:last-child { margin-bottom: 0; }
+        .step-num {
+            background: #4f46e5;
+            color: #fff;
+            font-size: 9px;
+            font-weight: 700;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .app-title {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
+        }
+
+        .app-subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+            margin: 4px 0 20px;
+            font-weight: 500;
+        }
+
+        .input-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+
+        .input-box {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 12px;
+            padding: 12px 14px;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .input-box:focus-visible { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.3); }
+
+        .btn-action {
+            width: 100%;
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            padding: 13px;
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 14px;
+            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.35);
+        }
+        .btn-action:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(79, 70, 229, 0.45); }
+        .btn-action:disabled { opacity: 0.6; cursor: progress; }
+
+        .status {
+            min-height: 18px;
+            margin: 12px 0 0;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        .status.error { color: #f87171; }
+        .status.ok { color: #4ade80; }
+
+        .insight {
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 12px;
+            line-height: 1.5;
+            color: #cbd5e1;
+        }
+        .insight[hidden] { display: none; }
+        .insight p { margin: 0 0 6px; }
+        .insight p:last-child { margin-bottom: 0; }
+        .insight .muted { color: #94a3b8; font-size: 11px; }
+
+        .metrics-container {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 12px;
+        }
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 9px;
+            color: #94a3b8;
+        }
+        .metric-val { color: #c7d2fe; font-family: ui-monospace, Consolas, monospace; font-weight: 600; }
+        .swatch {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 6px;
+            background: #3b82f6;
+            vertical-align: middle;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .fabric-badge {
+            background: rgba(129, 140, 248, 0.18);
+            color: #a5b4fc;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            border: 1px solid rgba(129, 140, 248, 0.3);
+            text-align: right;
+            max-width: 190px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .hint {
+            position: absolute;
+            left: 50%;
+            bottom: 20px;
+            transform: translateX(-50%);
+            z-index: 5;
+            margin: 0;
+            font-size: 12px;
+            color: #64748b;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 6px 14px;
+            border-radius: 20px;
+            pointer-events: none;
+        }
+
+        #loading-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #090b14;
+            z-index: 50;
+            transition: opacity 0.5s ease;
+        }
+        #loading-overlay.fade-out { opacity: 0; pointer-events: none; }
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(129, 140, 248, 0.2);
+            border-top-color: #818cf8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+
+    <!-- Fully matched Three.js r147 (Full Sheen PBR support + Global Loaders) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+<body>
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <p style="font-size: 13px; color: #94a3b8;">Loading 3D Spatial Showroom...</p>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div class="glass-panel">
+        <h1 class="app-title">3D Viewer</h1>
+        <p class="app-subtitle">Autonomous Spatial Showroom & AI Taste Stylist</p>
+
+        <label class="input-label" for="brandInput">Explore Brand Cultural DNA</label>
+        <div style="display: flex; gap: 8px;">
+            <input id="brandInput" type="text" value="nike" class="input-box" autocomplete="off" maxlength="60">
+        </div>
+
+        <!-- 1-Click Aesthetic Presets -->
+        <div class="presets-row">
+            <span class="preset-chip" onclick="quickSelect('Nike')">⚡ Nike</span>
+            <span class="preset-chip" onclick="quickSelect('Dior')">✨ Dior Luxury</span>
+            <span class="preset-chip" onclick="quickSelect('Stussy')">🛹 Stüssy Skate</span>
+            <span class="preset-chip" onclick="quickSelect('Balenciaga')">🖤 Balenciaga</span>
+            <span class="preset-chip" onclick="quickSelect('Casablanca')">🍸 Casablanca Silk</span>
+        </div>
+
+        <button id="projectBtn" type="button" class="btn-action">Map Qloo Taste to 3D</button>
+        <p id="status" class="status"></p>
+
+        <!-- AI Insight Box -->
+        <div id="insight" class="insight" hidden>
+            <p id="insightSource" style="font-weight: 700; color: #e2e8f0; font-size: 13px;"></p>
+            <p id="insightTags" class="muted" style="margin: 4px 0 8px;"></p>
+            <p id="insightReason" style="font-style: italic; color: #cbd5e1;"></p>
+        </div>
+
+        <!-- Dynamic 3D Telemetry -->
+        <div class="metrics-container">
+            <div class="metric-row"><span>Fabric Finish</span> <span id="uiFabric" class="fabric-badge">Heavy Cotton</span></div>
+            <div class="metric-row"><span>Sheen / Luster</span> <span id="uiSheen" class="metric-val">10%</span></div>
+            <div class="metric-row"><span>Fit Proportions</span> <span id="uiScale" class="metric-val">1.00 × 1.00</span></div>
+            <div class="metric-row"><span>Active Tint</span> <span class="metric-val"><span id="uiSwatch" class="swatch"></span><span id="uiC">#3b82f6</span></span></div>
+        </div>
+
+        <!-- How It Works Architecture Card -->
+        <div class="pipeline-card">
+            <div style="font-weight: 700; color: #cbd5e1; margin-bottom: 8px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em;">How 3D Viewer Works</div>
+            <div class="pipeline-step"><span class="step-num">1</span> <span><b>Qloo Taste AI:</b> Queries brand cultural graph, style signals & affinities.</span></div>
+            <div class="pipeline-step"><span class="step-num">2</span> <span><b>Gemini 2.0 Flash:</b> Computes PBR physical properties (roughness, sheen, drape).</span></div>
+            <div class="pipeline-step"><span class="step-num">3</span> <span><b>WebGL Engine:</b> Parametrically morphs silhouette & shader in real-time.</span></div>
+        </div>
+    </div>
+
+    <p class="hint">Click & drag to spin in 360° • Scroll to zoom</p>
+    <script>
+        'use strict';
+
+        const $ = (id) => document.getElementById(id);
+        const container = $('canvas-container');
+
+        // ---------- Photorealistic Scene Setup ----------
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0.45, 0.1, 2.8);
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.25;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // ---------- Full Freedom Showroom Controls ----------
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.set(0.45, 0, 0);
+
+        // 1. Full Screen-Space Dragging (Up, Down, Left, Right)
+        controls.screenSpacePanning = true; 
+        controls.enablePan = true;
+        controls.panSpeed = 1.0;
+
+        // 2. Full 360 Pitch & Yaw Rotation (Inspect Hood, Hem, Back, Front)
+        controls.enableRotate = true;
+        controls.rotateSpeed = 0.85;
+        controls.minPolarAngle = 0.1;
+        controls.maxPolarAngle = Math.PI - 0.1;  
+
+        // 3. Smooth Damping (Weighty, premium movement)
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+
+        // 4. Zoom Range
+        controls.enableZoom = true;
+        controls.minDistance = 0.8;
+        controls.maxDistance = 5.0;
+
+        // 5. Disabled auto-rotate so it doesn't fight your mouse
+        controls.autoRotate = false;
+
+        // 6. Explicit Mouse Controls
+        controls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,  // Left drag: tumble/spin in any direction
+            MIDDLE: THREE.MOUSE.DOLLY, // Scroll: Zoom
+            RIGHT: THREE.MOUSE.PAN     // Right drag: Move position across the screen
+        };
+
+        // ---------- Studio Lighting (Creates that "Pop-out" Depth) ----------
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+
+        // Key light (soft front-top)
+        const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+        keyLight.position.set(3, 4, 3.5);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 1024;
+        keyLight.shadow.mapSize.height = 1024;
+        scene.add(keyLight);
+
+        // Rim Light (gives edge glow that separates cloth from background)
+        const rimLight = new THREE.DirectionalLight(0x818cf8, 2.5);
+        rimLight.position.set(-3.5, 2.5, -3);
+        scene.add(rimLight);
+
+        // Fill Light (soft underside)
+        const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.8);
+        fillLight.position.set(0, -3, 2);
+        scene.add(fillLight);
+
+        // ---------- Procedural Fabric Micro-Weave Texture ----------
+        // Generates micro cloth threads so zooming in reveals realistic textile weave
+        function generateFabricWeaveMap() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#8080ff'; // Flat normal
+            ctx.fillRect(0, 0, 256, 256);
+
+            for (let y = 0; y < 256; y += 4) {
+                for (let x = 0; x < 256; x += 4) {
+                    const bump = ((x + y) % 8 === 0) ? 220 : 128;
+                    ctx.fillStyle = `rgb(${bump}, 128, 255)`;
+                    ctx.fillRect(x, y, 2, 2);
+                }
+            }
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(24, 24);
+            return texture;
+        }
+
+        const fabricNormalMap = generateFabricWeaveMap();
+
+        // ---------- Realistic PBR Cloth Material ----------
+        const clothMaterial = new THREE.MeshPhysicalMaterial({
+            color: new THREE.Color('#3b82f6'),
+            roughness: 0.8,
+            metalness: 0.05,
+            sheen: 0.2,
+            sheenColor: new THREE.Color(0xffffff),
+            sheenRoughness: 0.4,
+            normalMap: fabricNormalMap,
+            normalScale: new THREE.Vector2(0.35, 0.35),
+            clearcoat: 0.05,
+            clearcoatRoughness: 0.2,
+            side: THREE.DoubleSide // Renders both inside and outside of the hoodie
+        });
+
+        // Floating Floor Shadow
+        const shadowPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.5, 2.5),
+            new THREE.MeshBasicMaterial({
+                color: 0x000000,
+                transparent: true,
+                opacity: 0.35,
+                depthWrite: false
+            })
+        );
+        shadowPlane.rotation.x = -Math.PI / 2;
+        shadowPlane.position.y = -0.9;
+        scene.add(shadowPlane);
+
+        // ---------- Container & Controls Setup ----------
+        const modelContainer = new THREE.Group();
+        scene.add(modelContainer);
+
+        // Center camera straight on at chest level
+        camera.position.set(0.7, 0, 3.8);
+        controls.target.set(0.7, 0, 0);
+        controls.enableRotate = true;
+        controls.enableZoom = true;
+        controls.enablePan = false; // Prevents the hoodie from sliding off the screen
+
+        let loadedModel = null;
+        const targetScale = { x: 1, y: 1, z: 1 };
+        const currentScale = { x: 1, y: 1, z: 1 };
+        const targetColor = new THREE.Color('#3b82f6');
+
+        const loader = new THREE.GLTFLoader();
+        loader.load(
+            '/static/hoodie.glb',
+            (gltf) => {
+                loadedModel = gltf.scene;
+
+                // 1. ROTATE UPRIGHT: stands the hoodie up to show the chest
+                loadedModel.rotation.x = Math.PI / 2;
+
+                loadedModel.updateMatrixWorld(true);
+
+                // 2. Center the geometry exactly at (0, 0, 0)
+                const box = new THREE.Box3().setFromObject(loadedModel);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+
+                // 3. Normalize scale so it fits the viewport comfortably
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const normScale = 0.85 / (maxDim || 1);
+                modelContainer.scale.setScalar(normScale);
+
+                // 4. Anchor the pivot to the bottom hem so it scales from the floor up
+                loadedModel.position.x = -center.x;
+                // By shifting Y by half the bounding box height, the center of scale moves to the bottom edge
+                loadedModel.position.y = -center.y - (size.y / 2);
+                loadedModel.position.z = -center.z;
+
+                // 4. Apply clean cloth material
+                loadedModel.traverse((child) => {
+                    if (child.isMesh) {
+                        child.material = clothMaterial;
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+
+                modelContainer.add(loadedModel);
+                controls.update();
+
+                // 5. Remove loading screen and enable full mouse interaction
+                const overlay = $('loading-overlay');
+                overlay.classList.add('fade-out');
+                setTimeout(() => { overlay.style.display = 'none'; }, 500);
+            },
+            undefined,
+            (error) => {
+                console.error('Failed to load /static/hoodie.glb:', error);
+            }
+        );
+
+        // ---------- Render Loop ----------
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.elapsedTime;
+
+            if (loadedModel) {
+                currentScale.x += (targetScale.x - currentScale.x) * 0.08;
+                currentScale.y += (targetScale.y - currentScale.y) * 0.08;
+                currentScale.z += (targetScale.z - currentScale.z) * 0.08;
+
+                loadedModel.scale.set(currentScale.x, currentScale.y, currentScale.z);
+
+                modelContainer.position.x = 0.7;
+                shadowPlane.position.x = 0.45;
+                modelContainer.position.y = Math.sin(time * 1.5) * 0.04;
+                shadowPlane.scale.setScalar(1.0 - (modelContainer.position.y * 1.5));
+            }
+            clothMaterial.color.lerp(targetColor, 0.08);
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ---------- UI and Backend Logic ----------
+        const brandInput = $('brandInput');
+        const projectBtn = $('projectBtn');
+
+        // ---------- Local simulation fallback (only used if backend is unreachable) ----------
+const SIMULATED_BRANDS = {
+    stussy: {
+        spatial_showroom_commands: {
+            scale_width: 1.15, scale_height: 1.05, scale_depth: 1.10,
+            target_color: '#2b2b2b', fabric_type: 'fleece',
+            fabric_name: '450 GSM Heavyweight Fleece', sheen: 0.05, roughness: 0.85
+        },
+        meta: { qloo_matched_name: 'Stüssy', qloo_tags: ['skate', 'streetwear', 'california'],
+                reasoning: 'Streetwear heritage: oversized fit in heavyweight fleece.' }
+    },
+    nike: {
+        spatial_showroom_commands: {
+            scale_width: 1.10, scale_height: 1.00, scale_depth: 1.05,
+            target_color: '#111111', fabric_type: 'fleece',
+            fabric_name: 'Tech Fleece', sheen: 0.12, roughness: 0.78
+        },
+        meta: { qloo_matched_name: 'Nike', qloo_tags: ['athletic', 'performance'],
+                reasoning: 'Athletic streetwear: relaxed cut, technical fleece.' }
+    },
+    balenciaga: {
+        spatial_showroom_commands: {
+            scale_width: 1.30, scale_height: 1.15, scale_depth: 1.20,
+            target_color: '&#129655', fabric_type: 'cotton',
+            fabric_name: 'Oversized French Terry', sheen: 0.08, roughness: 0.82
+        },
+        meta: { qloo_matched_name: 'Balenciaga', qloo_tags: ['avant-garde', 'luxury'],
+                reasoning: 'Avant-garde luxury: extreme oversized silhouette.' }
+    },
+
+    dior: {
+    spatial_showroom_commands: {
+        scale_width: 0.95, scale_height: 1.00, scale_depth: 0.95,
+        target_color: '#0b0b0b', fabric_type: 'silk',
+        fabric_name: '100% Mulberry Silk Charmeuse', sheen: 0.95, roughness: 0.25
+    },
+    meta: { qloo_matched_name: 'Dior', qloo_tags: ['luxury', 'couture'],
+            reasoning: 'High luxury: fluid silk silhouette, high sheen.' }
+    },
+    casablanca: {
+    spatial_showroom_commands: {
+        scale_width: 1.05, scale_height: 1.00, scale_depth: 1.00,
+        target_color: '#e8e2d0', fabric_type: 'silk',
+        fabric_name: 'Silk Twill', sheen: 0.85, roughness: 0.30
+    },
+    meta: { qloo_matched_name: 'Casablanca', qloo_tags: ['luxury', 'resort'],
+            reasoning: 'Resort luxury: silk twill with luminous sheen.' }
+    }
+    };
+    function lookupSimulated(brand) {
+    const k = brand.trim().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // stüssy -> stussy
+    return SIMULATED_BRANDS[k] || null;
+}
+
+        function setStatus(msg, kind) {
+            const el = $('status');
+            el.textContent = msg;
+            el.className = 'status' + (kind ? ' ' + kind : '');
+        }
+
+        function applyShowroomCommands(cmd, meta) {
+    // 1. Proportions
+    targetScale.x = cmd.scale_width;
+    targetScale.y = cmd.scale_height;
+    targetScale.z = cmd.scale_depth;
+
+    // 2. Color
+    targetColor.set(cmd.target_color);
+
+    // 3. PBR Material (Silk vs Cotton)
+    clothMaterial.roughness = cmd.roughness;
+    clothMaterial.sheen = cmd.sheen;
+    if (cmd.fabric_type === 'silk' || cmd.fabric_type === 'satin') {
+        clothMaterial.clearcoat = 0.25;
+        clothMaterial.normalScale.set(0.15, 0.15);
+    } else {
+        clothMaterial.clearcoat = 0.0;
+        clothMaterial.normalScale.set(0.45, 0.45);
+    }
+
+    // 4. UI Panel
+    $('uiFabric').textContent = cmd.fabric_name;
+    $('uiSheen').textContent  = Math.round(cmd.sheen * 100) + '%';
+    $('uiScale').textContent  = `${cmd.scale_width.toFixed(2)} × ${cmd.scale_height.toFixed(2)}`;
+    $('uiC').textContent      = cmd.target_color;
+    $('uiSwatch').style.background = cmd.target_color;
+
+    // Insight box
+    $('insightSource').textContent = meta.qloo_matched_name ? `Qloo: ${meta.qloo_matched_name}` : 'Qloo: General Match';
+    $('insightTags').textContent   = meta.qloo_tags && meta.qloo_tags.length ? 'DNA: ' + meta.qloo_tags.join(' • ') : '';
+    $('insightReason').textContent = meta.reasoning;
+    $('insight').hidden = false;
+}
+
+        async function projectSpatialModel() {
+            const brand = brandInput.value.trim();
+            if (!brand) return;
+
+            projectBtn.disabled = true;
+            projectBtn.textContent = 'Querying Qloo & Gemini...'; // Changed
+            setStatus('Analyzing cultural graph & calculating PBR physics...'); // Changed
+
+            try {
+                const res = await fetch('/get-product-style?brand_name=' + encodeURIComponent(brand));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                applyShowroomCommands(data.spatial_showroom_commands, data.meta);
+
+                // 1. Update Proportions
+                targetScale.x = cmd.scale_width;
+                targetScale.y = cmd.scale_height;
+                targetScale.z = cmd.scale_depth;
+
+                // 2. Update Color
+                targetColor.set(cmd.target_color);
+
+                // 3. Update PBR Material Properties (Silk vs Cotton)
+                clothMaterial.roughness = cmd.roughness;
+                clothMaterial.sheen = cmd.sheen;
+                if (cmd.fabric_type === 'silk' || cmd.fabric_type === 'satin') {
+                    clothMaterial.clearcoat = 0.25;
+                    clothMaterial.normalScale.set(0.15, 0.15); // finer weave for silk
+                } else {
+                    clothMaterial.clearcoat = 0.0;
+                    clothMaterial.normalScale.set(0.45, 0.45); // coarser weave for fleece
+                }
+
+                // 4. Update UI Panel
+                $('uiFabric').textContent = cmd.fabric_name;
+                $('uiSheen').textContent = Math.round(cmd.sheen * 100) + '%';
+                $('uiScale').textContent = `${cmd.scale_width.toFixed(2)} × ${cmd.scale_height.toFixed(2)}`;
+                $('uiC').textContent = cmd.target_color;
+                $('uiSwatch').style.background = cmd.target_color;
+
+                // Insight box
+                $('insightSource').textContent = (data.meta.qloo_matched_name ? `Qloo: ${data.meta.qloo_matched_name}` : 'Qloo: General Match');
+                $('insightTags').textContent = data.meta.qloo_tags.length ? 'DNA: ' + data.meta.qloo_tags.join(' • ') : '';
+                $('insightReason').textContent = data.meta.reasoning;
+                $('insight').hidden = false;
+
+            } catch (err){
+                console.warn('[Cuddly Viewer] Backend unavailable, using local simulation:', err);
+                const sim = lookupSimulated(brand);
+                if (sim) {
+                    applyShowroomCommands(sim.spatial_showroom_commands, sim.meta);
+                    setStatus(`Offline mode: local style for ${brand}`, 'ok');
+                } else {
+                    // The backend used Python fallback rules, so we show a softer message
+                    setStatus(`Using AI fallback style for ${brand}`, 'ok'); 
+                }
+            }
+            finally{
+                projectBtn.disabled = false;
+                projectBtn.textContent = 'Map Qloo taste to 3D';
+            }
+        }
+        projectBtn.addEventListener('click', projectSpatialModel);
+        brandInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') projectSpatialModel(); });
+
+        // 1-Click Preset Handler
+        window.quickSelect = function(brandName) {
+            brandInput.value = brandName;
+            projectSpatialModel();
+        };
+        
+    </script>
+</body>
+</html>
