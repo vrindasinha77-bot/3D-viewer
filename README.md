@@ -1,6 +1,6 @@
-# Cuddly Viewer: Autonomous AI Merchandising
+# 3D Viewer: Autonomous AI Merchandising
 
-Cuddly Viewer is a spatial showroom that bridges the gap between cultural AI and 3D physics. It allows a user to type in any brand name (e.g., "Gucci", "Nike", "Balenciaga").
+3D Viewer is a spatial showroom that bridges the gap between cultural AI and 3D physics. It allows a user to type in any brand name (e.g., "Gucci", "Nike", "Balenciaga").
 
 Instead of just generating a 2D image, the app:
 * Queries the Qloo Taste Graph to extract the brand's exact cultural DNA, lifestyle tags, and affinities.
